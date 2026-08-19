@@ -17,9 +17,9 @@ public sealed class AppSettings
     /// <summary>
     /// Stop the clock after this many minutes without keyboard or mouse input, and backdate the
     /// stop to the last input. 0 disables it, and then an unlocked machine counts as work even
-    /// when nobody is at it.
+    /// when nobody is at it. Long enough to sit through a video without being marked away.
     /// </summary>
-    public int IdleTimeoutMinutes { get; set; } = 10;
+    public int IdleTimeoutMinutes { get; set; } = 30;
 
     /// <summary>Hours you are expected to work on a working day.</summary>
     public double ExpectedHoursPerDay { get; set; } = 5.6;

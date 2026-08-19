@@ -1,7 +1,7 @@
 # WorkTimeTray
 
 Tray app that logs work time to a plain csv. The clock runs while the Windows session is unlocked
-and somebody is actually at the machine; locking, sleeping, shutting down, or 10 minutes without
+and somebody is actually at the machine; locking, sleeping, shutting down, or 30 minutes without
 keyboard or mouse input stops it.
 
 ## Log
@@ -73,7 +73,7 @@ checkbox in the window.
 | --- | --- | --- |
 | `LogDirectory` | the install script's folder | where the csv files go |
 | `MinSessionSeconds` | 30 | drop sessions shorter than this; they would round to 0.00 h |
-| `IdleTimeoutMinutes` | 10 | pause after this long without input; 0 = never pause on idleness |
+| `IdleTimeoutMinutes` | 30 | pause after this long without input; 0 = never pause on idleness |
 | `ExpectedHoursPerDay` | 5.6 | what a working day is expected to be |
 | `WorkDays` | Monday–Friday | the days carrying that expectation |
 | `WeekStartsMonday` | true | false = follow the Windows locale |
@@ -96,8 +96,9 @@ The heartbeat file and `worktimetray.log` live next to the settings.
   session.
 * Sleep, hibernation and crashes never count: gaps are excluded, and a heartbeat every 30 s means a
   power cut costs at most 30 seconds.
-* Limits: a session spanning a daylight saving change is off by the shift, and watching a video
-  without touching anything counts as a break.
+* Limits: a session spanning a daylight saving change is off by the shift, and anything longer than
+  the idle timeout with no input at all - a long video, a long meeting away from the keyboard -
+  counts as a break.
 
 ## Build
 
