@@ -1,0 +1,11 @@
+# build output
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+
+# work time logs - this is personal data, never commit it
+worktime-*.csv
+current-session.txt
+worktimetray.log
+settings.json
