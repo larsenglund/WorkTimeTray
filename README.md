@@ -104,3 +104,7 @@ The heartbeat file and `worktimetray.log` live next to the settings.
 .NET 8 SDK, `dotnet build src/WorkTimeTray`. `install.ps1` publishes a framework-dependent single
 file exe, and clears `MSBuildSDKsPath` first: a stale value left in the environment points at an
 SDK version that may no longer exist, which breaks SDK resolution.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
