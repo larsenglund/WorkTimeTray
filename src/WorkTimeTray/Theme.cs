@@ -32,6 +32,7 @@ public static class Theme
     public static Color AccentSoft => IsDark ? Rgb(0x2C3E60) : Rgb(0xDDE8FD);
     public static Color Working => IsDark ? Rgb(0x3FB950) : Rgb(0x1A7F37);
     public static Color Ahead => Working;
+    public static Color Attention => IsDark ? Rgb(0xD29922) : Rgb(0xBF8700);
     public static Color Behind => IsDark ? Rgb(0xF85149) : Rgb(0xC1121F);
     public static Color Paused => IsDark ? Rgb(0x8B949E) : Rgb(0x8C959F);
     public static Color Weekend => IsDark ? Rgb(0x2A2C31) : Rgb(0xF4F5F7);

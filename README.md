@@ -2,7 +2,7 @@
 
 Tray app that logs work time to a plain csv. The clock runs while the Windows session is unlocked
 and somebody is actually at the machine; locking, sleeping, shutting down, or 30 minutes without
-keyboard or mouse input stops it.
+keyboard or mouse input stops it. **Pause** stops it deliberately, for non-work at your own desk.
 
 ## Log
 
@@ -27,12 +27,15 @@ Click the tray icon.
   the session that happens to be open — and the time worked today.
 * Bottom bar: today, week and month as *worked / expected*, the month balance, and what is left of
   the month target.
+* **Pause** (or `Ctrl+P`, or *Pause tracking* in the tray menu) stops the clock for non-work while
+  you stay at the machine, and the button turns amber until you resume. The tray icon goes amber
+  too, since a pause only ends when you end it.
 * Right panel lists the selected day's sessions, with **Add**, **Edit** and **Delete**. The running
   session is green and cannot be edited until it closes.
 * Sessions crossing midnight are split across both days and marked `(+1 d)` / `(-1 d)`.
 
-Keys: arrows move a day, PgUp/PgDn a month, `Home` jumps to today, `Enter` adds, `Del` deletes, `F5`
-reloads, `Esc` hides. X hides to the tray; *Exit* in the tray menu really quits.
+Keys: arrows move a day, PgUp/PgDn a month, `Home` jumps to today, `Enter` adds, `Del` deletes,
+`Ctrl+P` pauses, `F5` reloads, `Esc` hides. X hides to the tray; *Exit* in the tray menu really quits.
 
 The window is English whatever the Windows region is set to. The Add/Edit dialog uses spinners rather
 than a dropdown calendar, because that calendar is a native control that always follows the region.
@@ -83,6 +86,9 @@ The heartbeat file and `worktimetray.log` live next to the settings.
 
 ## How it decides you are working
 
+* A manual **Pause** outranks every other signal: unlocking, typing and moving the mouse all leave
+  the clock stopped until you resume. It is deliberately forgotten on restart — a pause you forgot
+  silently costs you a day, while a resume you forgot is one amber icon away from being noticed.
 * Session events — lock, unlock, logoff, connect, disconnect, suspend — start and stop the clock on
   the exact second.
 * A known lock is only lifted by an unlock event or by fresh input on our own desktop. Windows

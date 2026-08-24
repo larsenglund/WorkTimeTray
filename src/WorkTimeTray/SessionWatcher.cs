@@ -7,7 +7,10 @@ public enum WorkState
 {
     Working,
     Locked,
-    Idle
+    Idle,
+
+    /// <summary>Paused by hand. Outranks everything else until you resume.</summary>
+    Paused
 }
 
 /// <summary>
@@ -35,6 +38,7 @@ public sealed class SessionWatcher : IDisposable
     private DateTime _suppressStartUntil = DateTime.MinValue;
     private bool _lockedByEvent;
     private bool _startedOnce;
+    private bool _manuallyPaused;
     private bool _disposed;
 
     /// <summary>A gap larger than this between two ticks means the machine was not running.</summary>
@@ -94,6 +98,37 @@ public sealed class SessionWatcher : IDisposable
     /// <summary>When the clock is paused for idleness, the moment of the last keypress.</summary>
     public DateTime LastInput => DateTime.Now - Idle.Since();
 
+    /// <summary>When the manual pause was pressed.</summary>
+    public DateTime PausedSince { get; private set; }
+
+    /// <summary>
+    /// Manual pause, for doing something that is not work while sitting at the machine. It beats
+    /// every other signal: unlocking, typing and moving the mouse all leave the clock stopped until
+    /// you resume. Deliberately not remembered across restarts - a forgotten pause silently loses a
+    /// day, whereas a forgotten resume is visible the moment you look at the tray icon.
+    /// </summary>
+    public bool ManuallyPaused
+    {
+        get => _manuallyPaused;
+        set
+        {
+            if (_manuallyPaused == value) return;
+            _manuallyPaused = value;
+
+            if (value)
+            {
+                PausedSince = DateTime.Now;
+                if (IsWorking) StopSession(PausedSince);
+                SetState(WorkState.Paused);
+            }
+            else
+            {
+                _suppressStartUntil = DateTime.MinValue;
+                Evaluate();
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- core
 
     private void Evaluate()
@@ -109,6 +144,13 @@ public sealed class SessionWatcher : IDisposable
             _lockedTicks = 0;
         }
         _lastTick = now;
+
+        if (_manuallyPaused)
+        {
+            if (IsWorking) StopSession(now);
+            SetState(WorkState.Paused);
+            return;
+        }
 
         bool desktopLocked;
         try

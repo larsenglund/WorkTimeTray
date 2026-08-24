@@ -23,6 +23,7 @@ public sealed class MainForm : Form
     private readonly Label _dayTarget = new();
     private readonly ListView _list = new();
     private readonly CheckBox _autostart = new();
+    private readonly Button _pauseButton = new();
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
 
     private List<TimeEntry> _entries = new();
@@ -45,7 +46,7 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
-        Icon = (Icon)TrayIcons.Get(true).Clone();
+        Icon = (Icon)TrayIcons.Get(WorkState.Working).Clone();
         KeyPreview = true;
 
         BuildUi();
@@ -91,17 +92,22 @@ public sealed class MainForm : Form
             RefreshDayPanel();
         });
 
+        _pauseButton.SetBounds(348, 16, 104, 30);
+        Theme.StyleButton(_pauseButton);
+        _pauseButton.Click += (_, _) => TogglePause();
+
         _monthLabel.SetBounds(48, 18, 162, 28);
         _monthLabel.Font = new Font(Font.FontFamily, 13f, FontStyle.Bold);
         _monthLabel.ForeColor = Theme.Text;
         _monthLabel.TextAlign = ContentAlignment.MiddleCenter;
 
-        _statusLabel.SetBounds(348, 18, panel.Width - 360, 28);
+        _statusLabel.SetBounds(468, 18, panel.Width - 480, 28);
         _statusLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _statusLabel.Font = new Font(Font.FontFamily, 11f, FontStyle.Bold);
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
 
-        panel.Controls.AddRange(new Control[] { prev, _monthLabel, next, today, _statusLabel });
+        panel.Controls.AddRange(new Control[]
+            { prev, _monthLabel, next, today, _pauseButton, _statusLabel });
         return panel;
     }
 
@@ -345,6 +351,12 @@ public sealed class MainForm : Form
                 _statusLabel.Text = $"Working since {since:HH:mm:ss}   worked " +
                                     $"{(int)worked.TotalHours:00}:{worked.Minutes:00}:{worked.Seconds:00}";
                 break;
+            case WorkState.Paused:
+                var held = DateTime.Now - _watcher.PausedSince;
+                _statusLabel.ForeColor = Theme.Attention;
+                _statusLabel.Text = $"PAUSED by you at {_watcher.PausedSince:HH:mm:ss}   " +
+                                    $"{(int)held.TotalHours:00}:{held.Minutes:00}:{held.Seconds:00} not counted";
+                break;
             case WorkState.Idle:
                 _statusLabel.ForeColor = Theme.Paused;
                 _statusLabel.Text = $"Paused - idle since {_watcher.LastInput:HH:mm:ss}";
@@ -353,6 +365,29 @@ public sealed class MainForm : Form
                 _statusLabel.ForeColor = Theme.Paused;
                 _statusLabel.Text = "Paused - screen locked";
                 break;
+        }
+
+        UpdatePauseButton();
+    }
+
+    private void TogglePause() => _watcher.ManuallyPaused = !_watcher.ManuallyPaused;
+
+    /// <summary>The button shouts while a manual pause is on, so it cannot be forgotten.</summary>
+    private void UpdatePauseButton()
+    {
+        if (_watcher.ManuallyPaused)
+        {
+            _pauseButton.Text = "Resume";
+            _pauseButton.BackColor = Theme.Attention;
+            _pauseButton.ForeColor = Color.White;
+            _pauseButton.FlatAppearance.BorderColor = Theme.Attention;
+        }
+        else
+        {
+            _pauseButton.Text = "Pause";
+            _pauseButton.BackColor = Theme.Surface;
+            _pauseButton.ForeColor = Theme.Text;
+            _pauseButton.FlatAppearance.BorderColor = Theme.Border;
         }
     }
 
@@ -573,6 +608,7 @@ public sealed class MainForm : Form
     {
         if (e.KeyCode == Keys.Escape) { Hide(); e.Handled = true; return; }
         if (e.KeyCode == Keys.F5) { Reload(); e.Handled = true; return; }
+        if (e.Control && e.KeyCode == Keys.P) { TogglePause(); e.Handled = true; return; }
         base.OnKeyDown(e);
     }
 

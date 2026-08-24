@@ -3,19 +3,25 @@ using System.Runtime.InteropServices;
 
 namespace WorkTimeTray;
 
-/// <summary>Draws the tray icon at runtime: a clock face, green while working, grey when paused.</summary>
+/// <summary>
+/// Draws the tray icon at runtime: a clock face, green while working, amber when you paused it by
+/// hand, grey when it stopped by itself. Amber is its own colour so a forgotten manual pause is
+/// obvious at a glance rather than looking like an ordinary locked screen.
+/// </summary>
 public static class TrayIcons
 {
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr handle);
 
-    private static Icon? _working;
-    private static Icon? _paused;
+    private static readonly Dictionary<WorkState, Icon> Cache = new();
 
-    public static Icon Get(bool working) =>
-        working ? _working ??= Create(true) : _paused ??= Create(false);
+    public static Icon Get(WorkState state)
+    {
+        if (!Cache.TryGetValue(state, out var icon)) Cache[state] = icon = Create(state);
+        return icon;
+    }
 
-    private static Icon Create(bool working)
+    private static Icon Create(WorkState state)
     {
         const int size = 32;
         using var bmp = new Bitmap(size, size);
@@ -24,7 +30,12 @@ public static class TrayIcons
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(Color.Transparent);
 
-            var face = working ? Color.FromArgb(0x2E, 0xA0, 0x43) : Color.FromArgb(0x7D, 0x84, 0x8C);
+            var face = state switch
+            {
+                WorkState.Working => Color.FromArgb(0x2E, 0xA0, 0x43),
+                WorkState.Paused => Color.FromArgb(0xD2, 0x99, 0x22),
+                _ => Color.FromArgb(0x7D, 0x84, 0x8C)
+            };
             var rim = ControlPaint.Dark(face, 0.15f);
 
             var r = new Rectangle(1, 1, size - 3, size - 3);

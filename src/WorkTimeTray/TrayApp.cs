@@ -11,6 +11,7 @@ public sealed class TrayApp : ApplicationContext
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _todayItem;
     private readonly ToolStripMenuItem _autostartItem;
+    private readonly ToolStripMenuItem _pauseItem;
     private readonly System.Windows.Forms.Timer _tooltipTimer = new() { Interval = 15000 };
     private readonly SingleInstance _singleInstance;
 
@@ -33,10 +34,14 @@ public sealed class TrayApp : ApplicationContext
         };
         _autostartItem.CheckedChanged += (_, _) => Autostart.Set(_autostartItem.Checked);
 
+        _pauseItem = new ToolStripMenuItem("Pause tracking") { CheckOnClick = true };
+        _pauseItem.CheckedChanged += (_, _) => _watcher.ManuallyPaused = _pauseItem.Checked;
+
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("Open", null, (_, _) => ShowWindow()) { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add(_todayItem);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(_pauseItem);
         menu.Items.Add(_autostartItem);
         menu.Items.Add(new ToolStripMenuItem("Open log folder", null, (_, _) => OpenLogFolder()));
         menu.Items.Add(new ToolStripSeparator());
@@ -45,7 +50,7 @@ public sealed class TrayApp : ApplicationContext
 
         _icon = new NotifyIcon
         {
-            Icon = TrayIcons.Get(_watcher.IsWorking),
+            Icon = TrayIcons.Get(_watcher.State),
             ContextMenuStrip = menu,
             Visible = true
         };
@@ -71,7 +76,7 @@ public sealed class TrayApp : ApplicationContext
         if (_exiting) return;   // the tray icon is being torn down, touching it throws
         try
         {
-            _icon.Icon = TrayIcons.Get(_watcher.IsWorking);
+            _icon.Icon = TrayIcons.Get(_watcher.State);
         }
         catch (Exception ex)
         {
@@ -122,6 +127,7 @@ public sealed class TrayApp : ApplicationContext
     {
         WorkState.Working => "working",
         WorkState.Idle => "idle",
+        WorkState.Paused => "PAUSED",
         _ => "locked"
     };
 
@@ -129,6 +135,7 @@ public sealed class TrayApp : ApplicationContext
     {
         _todayItem.Text = $"Today: {TodayText()} h  ({StateWord()})";
         _autostartItem.Checked = Autostart.IsEnabled;
+        _pauseItem.Checked = _watcher.ManuallyPaused;
     }
 
     private void ShowWindow()
