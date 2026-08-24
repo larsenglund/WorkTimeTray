@@ -61,7 +61,8 @@ $settings = [ordered]@{
 $settings | ConvertTo-Json | Set-Content -Path $settingsPath -Encoding UTF8
 Write-Host "Settings: $settingsPath  (log -> $($settings.LogDirectory))"
 
-# The app registers itself: HKCU Run key plus a Startup folder shortcut, both with --autostart.
+# The app registers itself: HKCU Run key, Startup folder shortcut and a five minute watchdog task,
+# all launching it with --autostart.
 if ($NoAutostart) {
     Start-Process -FilePath $exe -ArgumentList '--autostart-off' -Wait
     Write-Host 'Autostart left disabled.'
@@ -70,7 +71,12 @@ if ($NoAutostart) {
     Start-Sleep -Milliseconds 400
     $lnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'WorkTimeTray.lnk'
     $reg = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name WorkTimeTray -ErrorAction SilentlyContinue).WorkTimeTray
-    Write-Host "Autostart: Run key $(if ($reg) {'ok'} else {'MISSING'}), Startup shortcut $(if (Test-Path $lnk) {'ok'} else {'MISSING'})"
+    $null = schtasks /Query /TN 'WorkTimeTray watchdog' 2>&1
+    $task = ($LASTEXITCODE -eq 0)
+    Write-Host ("Autostart: Run key {0}, Startup shortcut {1}, watchdog task {2}" -f `
+        $(if ($reg) {'ok'} else {'MISSING'}),
+        $(if (Test-Path $lnk) {'ok'} else {'MISSING'}),
+        $(if ($task) {'ok, every 5 min'} else {'MISSING'}))
 }
 
 if (-not $NoStart) {

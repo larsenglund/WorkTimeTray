@@ -7,16 +7,23 @@ namespace WorkTimeTray;
 /// <summary>
 /// Run-at-logon registration, per user and without elevation.
 ///
-/// Two mechanisms are used together, because the HKCU Run key alone proved unreliable here: after
-/// one reboot Explorer enumerated the key and started every entry in it except this one, with no
-/// error anywhere. A shortcut in the Startup folder is a separate path through the shell, so if one
-/// is skipped the other still fires. Both pass --autostart, and a second instance started that way
-/// exits silently instead of popping the window.
+/// Three mechanisms are used together, because each covers a different failure:
+///
+/// * the HKCU Run key - the usual way, but Explorer was once seen enumerating the key and starting
+///   every entry in it except this one, with no error anywhere;
+/// * a shortcut in the Startup folder - a separate path through the shell, so if one is skipped the
+///   other still fires;
+/// * a scheduled task every five minutes - the other two only fire at logon, so a crash or a killed
+///   process would otherwise leave the app dead for the rest of the day. It happened.
+///
+/// All three pass --autostart, and an instance started that way exits silently when one is already
+/// running, so the repeating task costs a few milliseconds and never pops a window.
 /// </summary>
 public static class Autostart
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "WorkTimeTray";
+    private const string TaskName = "WorkTimeTray watchdog";
     public const string Argument = "--autostart";
 
     public static string ExecutablePath
@@ -55,6 +62,56 @@ public static class Autostart
     {
         SetRunKey(enabled);
         SetShortcut(enabled);
+        SetWatchdogTask(enabled);
+    }
+
+    /// <summary>
+    /// A task that relaunches the app every five minutes if it is not running. Creating it needs no
+    /// elevation as long as the trigger is time based; an ONLOGON trigger would be refused.
+    /// </summary>
+    /// <summary>Re-arms the watchdog if autostart is on. Called at every start.</summary>
+    public static void EnsureWatchdog()
+    {
+        if (IsEnabled) SetWatchdogTask(true);
+    }
+
+    /// <summary>
+    /// Drops the watchdog task. Used when you quit on purpose: without this the task would relaunch
+    /// the app within five minutes and Exit would not mean anything. Starting the app again re-arms
+    /// it, and so does the next logon.
+    /// </summary>
+    public static void RemoveWatchdog() => SetWatchdogTask(false);
+
+    private static void SetWatchdogTask(bool enabled)
+    {
+        var arguments = enabled
+            ? $"/Create /TN \"{TaskName}\" /SC MINUTE /MO 5 /TR \"\\\"{ExecutablePath}\\\" {Argument}\" /F"
+            : $"/Delete /TN \"{TaskName}\" /F";
+
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "schtasks.exe",
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
+            if (process is null) return;
+
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit(10000);
+
+            // Deleting a task that is not there is not a failure worth reporting.
+            if (process.ExitCode != 0 && enabled)
+                Log.Error($"schtasks exited {process.ExitCode} for the watchdog task: {error.Trim()}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Failed to change the watchdog task", ex);
+        }
     }
 
     private static void SetRunKey(bool enabled)

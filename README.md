@@ -61,11 +61,22 @@ Publishes to `%LOCALAPPDATA%\Programs\WorkTimeTray`, writes the settings, regist
 starts it. Options: `-LogDirectory <path>`, `-NoAutostart`, `-NoStart`. `.\uninstall.ps1` removes
 everything except the csv files.
 
-Autostart registers the `Run` key **and** a Startup folder shortcut, because Explorer was once seen
-silently skipping the `Run` entry while starting every other one. Duplicate launches exit quietly,
-and every launch appends a line to `worktimetray.log`, which is how you tell whether Windows started
-the app. `WorkTimeTray.exe --autostart-on` / `--autostart-off` toggle it from a script, as does the
-checkbox in the window.
+Autostart uses three mechanisms, each covering a different failure:
+
+* the **`Run` key** — the usual way, though Explorer was once seen silently skipping this entry while
+  starting every other one in the key;
+* a **Startup folder shortcut** — a separate path through the shell, so if one is skipped the other
+  still fires;
+* a **watchdog task** every five minutes — the first two only fire at logon, so a crash or a killed
+  process would otherwise leave the app dead for the rest of the day. It needs no elevation because
+  the trigger is time based; an at-logon trigger would be refused.
+
+All three launch it with `--autostart`, and an instance started that way exits silently when one is
+already running, so the watchdog costs a few milliseconds and never pops a window. Quitting through
+*Exit* takes the watchdog down as well, otherwise it would undo your Exit within five minutes;
+starting the app again re-arms it. Every launch appends a line to `worktimetray.log`, which is how
+you tell whether Windows started the app. `WorkTimeTray.exe --autostart-on` / `--autostart-off`
+toggle all three from a script, as does the checkbox in the window.
 
 ## Settings
 

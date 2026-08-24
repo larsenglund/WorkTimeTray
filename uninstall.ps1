@@ -17,6 +17,9 @@ if (Test-Path $exe) {
     # --quit closes the session that is open right now before the app exits.
     Start-Process -FilePath $exe -ArgumentList '--quit' -Wait
     Start-Sleep -Milliseconds 1200
+    # --autostart-off drops the Run key, the Startup shortcut and the watchdog task in one go.
+    Start-Process -FilePath $exe -ArgumentList '--autostart-off' -Wait
+    Start-Sleep -Milliseconds 600
 }
 Get-Process WorkTimeTray -ErrorAction SilentlyContinue | Stop-Process -Force
 
@@ -29,6 +32,12 @@ $lnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'WorkTimeTray.lnk'
 if (Test-Path $lnk) {
     Remove-Item $lnk -Force
     Write-Host 'Removed the Startup folder shortcut.'
+}
+
+$null = schtasks /Query /TN 'WorkTimeTray watchdog' 2>&1
+if ($LASTEXITCODE -eq 0) {
+    $null = schtasks /Delete /TN 'WorkTimeTray watchdog' /F 2>&1
+    Write-Host 'Removed the watchdog task.'
 }
 
 if (Test-Path $installTo) {

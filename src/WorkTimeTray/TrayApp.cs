@@ -61,6 +61,7 @@ public sealed class TrayApp : ApplicationContext
         _watcher.SessionClosed += _ => { RecomputeToday(); UpdateTooltip(); };
 
         _singleInstance = new SingleInstance(ShowWindow, Quit);
+        Autostart.EnsureWatchdog();   // a previous deliberate quit will have taken it down
 
         RecomputeToday();
         UpdateTooltip();
@@ -168,6 +169,7 @@ public sealed class TrayApp : ApplicationContext
     protected override void ExitThreadCore()
     {
         _exiting = true;
+        Autostart.RemoveWatchdog();   // you asked it to stop; it stays stopped
         _tooltipTimer.Stop();
         _watcher.Dispose();   // stop polling first, so the flush below is the last word
         _watcher.Flush();     // write the session that is open right now
