@@ -93,7 +93,11 @@ toggle all three from a script, as does the checkbox in the window.
 | `WeekStartsMonday` | true | false = follow the Windows locale |
 | `ShowWindowOnStartup` | false | open the window at logon too |
 
-The heartbeat file and `worktimetray.log` live next to the settings.
+The heartbeat file and `worktimetray.log` live next to the settings. Every launch logs which
+settings file it resolved and which directory it is logging to, and the log directory is
+remembered between runs: if it ever changes you get a tray balloon and a line in the log. A
+silent change would split your history across two folders and only show up days later as a
+window that looks empty.
 
 ## How it decides you are working
 

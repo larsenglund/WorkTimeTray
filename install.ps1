@@ -58,7 +58,9 @@ $settings = [ordered]@{
     WeekStartsMonday    = $true
     ShowWindowOnStartup = $false
 }
-$settings | ConvertTo-Json | Set-Content -Path $settingsPath -Encoding UTF8
+# Written without a byte order mark: a BOM is invisible and breaks strict JSON readers.
+$json = $settings | ConvertTo-Json
+[System.IO.File]::WriteAllText($settingsPath, $json, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "Settings: $settingsPath  (log -> $($settings.LogDirectory))"
 
 # The app registers itself: HKCU Run key, Startup folder shortcut and a five minute watchdog task,

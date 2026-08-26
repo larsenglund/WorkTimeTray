@@ -57,6 +57,8 @@ public sealed class TrayApp : ApplicationContext
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowWindow(); };
         _icon.DoubleClick += (_, _) => ShowWindow();
 
+        WarnIfLogDirectoryChanged();
+
         _watcher.StateChanged += OnStateChanged;
         _watcher.SessionClosed += _ => { RecomputeToday(); UpdateTooltip(); };
 
@@ -70,6 +72,45 @@ public sealed class TrayApp : ApplicationContext
 
         if (settings.ShowWindowOnStartup || args.Contains("--show", StringComparer.OrdinalIgnoreCase))
             ShowWindow();
+    }
+
+    /// <summary>
+    /// Remembers the log directory between runs and complains when it changes. A change is either a
+    /// deliberate reinstall with a new -LogDirectory, or the settings did not load and the app fell
+    /// back to its default folder - which silently splits the history in two and is otherwise only
+    /// noticed days later, when the window looks empty.
+    /// </summary>
+    private void WarnIfLogDirectoryChanged()
+    {
+        try
+        {
+            // Anchored to the default folder, never to the resolved one: if a future fault moves
+            // the whole configuration, a marker that moved with it would never notice.
+            var anchor = AppSettings.DefaultDataDirectory();
+            Directory.CreateDirectory(anchor);
+            var marker = Path.Combine(anchor, "last-logdir.txt");
+            var current = _settings.LogDirectory;
+            var previous = File.Exists(marker) ? File.ReadAllText(marker).Trim() : null;
+
+            if (!string.IsNullOrEmpty(previous) &&
+                !string.Equals(previous, current, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Error($"Log directory changed from '{previous}' to '{current}' " +
+                          $"(settings file: {_settings.SettingsPath})");
+                var nl = Environment.NewLine;
+                _icon.ShowBalloonTip(20000, "WorkTimeTray is logging somewhere else",
+                    "Now writing to:" + nl + current + nl + nl +
+                    "Previously:" + nl + previous + nl + nl +
+                    "If that was not deliberate, your history is split across two folders.",
+                    ToolTipIcon.Warning);
+            }
+
+            File.WriteAllText(marker, current);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Failed to check the log directory marker", ex);
+        }
     }
 
     private void OnStateChanged()

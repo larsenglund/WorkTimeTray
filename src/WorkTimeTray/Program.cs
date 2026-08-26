@@ -29,7 +29,8 @@ internal static class Program
         if (quitting) return; // nothing was running
 
         // One line per launch: the only reliable way to tell afterwards whether Windows started us.
-        Log.Info($"Started ({(fromAutostart ? "autostart" : "manual")}), log -> {settings.LogDirectory}");
+        Log.Info($"Started ({(fromAutostart ? "autostart" : "manual")}), " +
+                 $"settings {settings.SettingsPath}, log -> {settings.LogDirectory}");
 
         // The whole UI is written in English, so date names are too - otherwise a Swedish Windows
         // gives "onsdag 19 augusti" next to "Working since", which reads like a bug.
