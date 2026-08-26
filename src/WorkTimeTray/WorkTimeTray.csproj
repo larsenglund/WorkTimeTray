@@ -12,6 +12,7 @@
     <Product>WorkTimeTray</Product>
     <Description>Tray app that logs work time based on Windows session lock state.</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationIcon>WorkTimeTray.ico</ApplicationIcon>
     <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
   </PropertyGroup>
 

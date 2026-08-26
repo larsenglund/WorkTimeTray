@@ -1,0 +1,2 @@
+# keep binary assets byte-exact regardless of core.autocrlf
+*.ico binary
