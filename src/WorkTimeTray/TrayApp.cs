@@ -57,6 +57,7 @@ public sealed class TrayApp : ApplicationContext
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowWindow(); };
         _icon.DoubleClick += (_, _) => ShowWindow();
 
+        WarnIfSettingsWereNotRead();
         WarnIfLogDirectoryChanged();
 
         _watcher.StateChanged += OnStateChanged;
@@ -72,6 +73,21 @@ public sealed class TrayApp : ApplicationContext
 
         if (settings.ShowWindowOnStartup || args.Contains("--show", StringComparer.OrdinalIgnoreCase))
             ShowWindow();
+    }
+
+    /// <summary>
+    /// The settings could not be read at all, so the app invented defaults and is writing its log
+    /// somewhere other than usual. Silently carrying on is what cost two mornings of history.
+    /// </summary>
+    private void WarnIfSettingsWereNotRead()
+    {
+        if (!_settings.CreatedFromDefaults) return;
+
+        var nl = Environment.NewLine;
+        _icon.ShowBalloonTip(30000, "WorkTimeTray could not read its settings",
+            "It fell back to defaults and is writing to:" + nl + _settings.LogDirectory + nl + nl +
+            "If that is not where your log lives, quit and start it again.",
+            ToolTipIcon.Error);
     }
 
     /// <summary>

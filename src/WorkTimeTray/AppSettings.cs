@@ -52,24 +52,62 @@ public sealed class AppSettings
     ///   2. settings.json next to the executable (portable install)
     ///   3. %LOCALAPPDATA%\WorkTimeTray
     /// </summary>
+    /// <summary>How many times to look for a settings file before concluding there is not one.</summary>
+    private const int LoadAttempts = 6;
+    private const int LoadRetryMs = 400;
+
+    /// <summary>
+    /// True when no settings file could be read and defaults were invented. Worth shouting about:
+    /// it means the log is going somewhere other than where it went last time.
+    /// </summary>
+    [JsonIgnore]
+    public bool CreatedFromDefaults { get; private set; }
+
+    /// <summary>
+    /// Reads the settings file, retrying before it gives up.
+    ///
+    /// At logon the profile folder can be briefly unavailable, and File.Exists answers false for
+    /// *any* failure, not only for a missing file. Treating that as "no settings" made the app adopt
+    /// its default folder and log there silently - which split the history in two on two separate
+    /// mornings, with nothing written anywhere to say it had happened, because the fallback's own
+    /// Save() and log writes were failing in the same moment. So a file that cannot be read is now
+    /// carefully distinguished from a file that is not there.
+    /// </summary>
     public static AppSettings Load()
     {
-        foreach (var dir in CandidateDirectories())
+        for (var attempt = 1; attempt <= LoadAttempts; attempt++)
         {
-            var path = Path.Combine(dir, "settings.json");
-            if (!File.Exists(path)) continue;
-            try
+            var sawUnreadable = false;
+
+            foreach (var dir in CandidateDirectories())
             {
-                var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) ?? new AppSettings();
-                s.SettingsPath = path;
-                if (string.IsNullOrWhiteSpace(s.LogDirectory)) s.LogDirectory = dir;
-                s.Normalize();
-                return s;
+                var path = Path.Combine(dir, "settings.json");
+                var text = TryRead(path, out var missing);
+
+                if (text is null)
+                {
+                    if (!missing) sawUnreadable = true;   // present but not readable yet - worth waiting for
+                    continue;
+                }
+
+                try
+                {
+                    var s = JsonSerializer.Deserialize<AppSettings>(text, JsonOptions) ?? new AppSettings();
+                    s.SettingsPath = path;
+                    if (string.IsNullOrWhiteSpace(s.LogDirectory)) s.LogDirectory = dir;
+                    s.Normalize();
+                    return s;
+                }
+                catch (Exception ex)
+                {
+                    sawUnreadable = true;                 // corrupt, or half written by an installer
+                    Log.Error($"Attempt {attempt}: cannot parse {path}", ex);
+                }
             }
-            catch (Exception ex)
-            {
-                Log.Error("Failed to read " + path, ex);
-            }
+
+            // Every candidate was genuinely absent, so waiting will not conjure one up.
+            if (!sawUnreadable) break;
+            if (attempt < LoadAttempts) Thread.Sleep(LoadRetryMs * attempt);
         }
 
         var fallback = Environment.GetEnvironmentVariable("WORKTIMETRAY_DIR");
@@ -77,11 +115,41 @@ public sealed class AppSettings
         var fresh = new AppSettings
         {
             SettingsPath = Path.Combine(fallback, "settings.json"),
-            LogDirectory = fallback
+            LogDirectory = fallback,
+            CreatedFromDefaults = true
         };
         fresh.Normalize();
         fresh.Save();
+        Log.Error($"No settings file could be read after {LoadAttempts} attempts. " +
+                  $"Falling back to defaults and logging to {fresh.LogDirectory}");
         return fresh;
+    }
+
+    /// <summary>
+    /// Reads a file, saying whether it is absent or merely unreadable right now - the distinction
+    /// File.Exists cannot make, and the one this whole class turns on.
+    /// </summary>
+    private static string? TryRead(string path, out bool missing)
+    {
+        missing = false;
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (FileNotFoundException)
+        {
+            missing = true;
+            return null;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            missing = true;
+            return null;
+        }
+        catch
+        {
+            return null;   // locked, denied, offline: all worth another attempt
+        }
     }
 
     private static IEnumerable<string> CandidateDirectories()
