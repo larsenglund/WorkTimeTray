@@ -43,7 +43,11 @@ than a dropdown calendar, because that calendar is a native control that always 
 ## Expected time
 
 A working day expects `ExpectedHoursPerDay`, every other day expects nothing. With flexible hours the
-number that matters is the month **balance** — worked minus expected.
+number that matters is the **balance** — worked minus expected — and it does not reset on the first
+of the month. Whatever each month came out over or under is carried into the next, so the headline
+figure is the running total across everything logged so far: +1 h, then +2 h, then -1 h leaves you
+starting the fourth month at +2 h. The bottom bar splits it into what was brought forward and what
+this month has contributed.
 
 * Days in the future are not due yet and never count as a deficit; the full month target is shown
   separately, with the working days left to reach it.

@@ -322,16 +322,39 @@ public sealed class MainForm : Form
             $"        Week {weekNo}  {Fmt(weekActual)} / {Fmt(weekExpected)} h" +
             $"        {month:MMMM}  {Fmt(monthActual)} / {Fmt(monthExpected)} h";
 
-        var balance = monthActual - monthExpected;
+        // Flexible time does not reset on the first of the month, so neither does the balance: what
+        // every earlier month came out over or under is carried in, and the headline figure is the
+        // running total rather than this month in isolation.
+        var carriedIn = CarriedInto(month);
+        var monthBalance = monthActual - monthExpected;
+        var balance = carriedIn + monthBalance;
+
         _balanceLabel.Text = $"Balance {CalendarView.Signed(balance)} h";
         _balanceLabel.ForeColor = Math.Abs(balance) < 0.005 ? Theme.TextDim
                                 : balance > 0 ? Theme.Ahead : Theme.Behind;
 
         var isThisMonth = month.Year == today.Year && month.Month == today.Month;
+        var breakdown = $"{CalendarView.Signed(carriedIn)} h brought forward, " +
+                        $"{CalendarView.Signed(monthBalance)} h in {month:MMMM}";
         _monthTargetLabel.Text = isThisMonth
-            ? $"for {month:MMMM}  ·  target {Fmt(monthTarget)} h  ·  {Fmt(Math.Max(0, monthTarget - monthActual))} h " +
+            ? breakdown + $"  ·  target {Fmt(monthTarget)} h  ·  {Fmt(Math.Max(0, monthTarget - monthActual))} h " +
               $"left over the {workingDaysLeft} working days after today"
-            : $"for {month:MMMM}  ·  target {Fmt(monthTarget)} h";
+            : breakdown + $"  ·  target {Fmt(monthTarget)} h";
+    }
+
+    /// <summary>
+    /// Everything over or under expectation from the first logged day up to the day before this
+    /// month starts. Months do not settle up on their own, so a surplus or a deficit follows you
+    /// into the next one.
+    /// </summary>
+    private double CarriedInto(DateTime month)
+    {
+        if (_trackingStart is null) return 0d;
+
+        double balance = 0;
+        for (var day = _trackingStart.Value; day < month.Date; day = day.AddDays(1))
+            balance += HoursForDay(day) - ExpectedOn(day);
+        return balance;
     }
 
     private DateTime StartOfWeek(DateTime date)
