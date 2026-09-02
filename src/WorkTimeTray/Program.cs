@@ -7,7 +7,19 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        var settings = AppSettings.Load();
+        AppSettings settings;
+        try
+        {
+            settings = AppSettings.Load();
+        }
+        catch (SettingsUnavailableException ex)
+        {
+            // Better not to run at all than to run pointed at the wrong folder. The watchdog task
+            // comes back within five minutes, and by then the folder has always been readable.
+            Log.Error("Not starting: " + ex.Message);
+            return;
+        }
+
         Log.FilePath = Path.Combine(settings.StateDirectory, "worktimetray.log");
 
         // Scripted switches, handled without starting the tray.

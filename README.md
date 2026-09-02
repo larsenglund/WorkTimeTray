@@ -103,12 +103,17 @@ remembered between runs: if it ever changes you get a tray balloon and a line in
 silent change would split your history across two folders and only show up days later as a
 window that looks empty.
 
-Reading the settings is retried for a few seconds before the app concludes there are none. At logon
-the profile folder can be briefly unavailable, and `File.Exists` reports false for *any* failure, not
-only for a missing file - taking that at face value made the app adopt its defaults and log to
-another folder twice, silently, because the fallback's own save and log writes were failing in the
-same moment. A file that cannot be read is now told apart from a file that is not there, and giving
-up and using defaults is reported in the log and as an error balloon.
+Absence of a settings file has to be **proven** - the containing folder listed, the file genuinely
+not in it - and anything short of proof is retried for about fifteen seconds. If it still cannot be
+proven, the app **refuses to start** rather than logging somewhere else; the watchdog retries within
+five minutes, by which time the folder is invariably readable again.
+
+That severity is earned. At logon the folder is briefly unavailable, and the app used to read that as
+"no settings file", adopt its default folder and write the day's sessions there - so the window
+showed only today while every earlier day sat in a file it was no longer reading. It happened three
+times. Twice the diagnostics added afterwards were themselves defeated, because the log that would
+have explained it lives in the folder that was unavailable. Hence also the breadcrumb in `%TEMP%`:
+when the usual log cannot be written, the message goes there instead.
 
 ## How it decides you are working
 

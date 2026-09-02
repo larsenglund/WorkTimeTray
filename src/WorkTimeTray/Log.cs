@@ -33,6 +33,22 @@ public static class Log
                 // logging must never take the app down
             }
         }
+
+        // The usual log lives in the folder that startup faults make unavailable, so the one
+        // message that explains such a fault is exactly the one that cannot be written. Leave the
+        // breadcrumb somewhere else instead.
+        try
+        {
+            lock (Gate)
+            {
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "worktimetray-startup.log"),
+                    text + Environment.NewLine);
+            }
+        }
+        catch
+        {
+            // nothing further to try
+        }
     }
 
     public static void Info(string message) => Error(message);

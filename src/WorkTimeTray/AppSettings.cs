@@ -52,41 +52,54 @@ public sealed class AppSettings
     ///   2. settings.json next to the executable (portable install)
     ///   3. %LOCALAPPDATA%\WorkTimeTray
     /// </summary>
-    /// <summary>How many times to look for a settings file before concluding there is not one.</summary>
-    private const int LoadAttempts = 6;
-    private const int LoadRetryMs = 400;
+    /// <summary>How long to keep trying before giving up on a settings file that may exist.</summary>
+    private const int LoadAttempts = 10;
+    private const int LoadRetryMs = 300;
 
     /// <summary>
-    /// True when no settings file could be read and defaults were invented. Worth shouting about:
-    /// it means the log is going somewhere other than where it went last time.
+    /// True when there was demonstrably no settings file and defaults were created - a first run.
+    /// Never set because a file could not be read: that case refuses to start instead.
     /// </summary>
     [JsonIgnore]
     public bool CreatedFromDefaults { get; private set; }
 
     /// <summary>
-    /// Reads the settings file, retrying before it gives up.
+    /// Finds and reads the settings file.
     ///
-    /// At logon the profile folder can be briefly unavailable, and File.Exists answers false for
-    /// *any* failure, not only for a missing file. Treating that as "no settings" made the app adopt
-    /// its default folder and log there silently - which split the history in two on two separate
-    /// mornings, with nothing written anywhere to say it had happened, because the fallback's own
-    /// Save() and log writes were failing in the same moment. So a file that cannot be read is now
-    /// carefully distinguished from a file that is not there.
+    /// The hard part is telling "there is no settings file" apart from "I cannot see it right now",
+    /// and getting that wrong has cost this log three times. At startup the folder can be briefly
+    /// unavailable; the app then adopted its default folder, wrote the day's sessions there, and
+    /// could not even record that it had done so, because the log it would have written that to
+    /// lives in the folder that was unavailable. The window then showed only today.
+    ///
+    /// So absence must be proven - the containing folder listed, the file genuinely not in it - and
+    /// anything short of proof is retried. If it still cannot be proven, the app refuses to start
+    /// rather than logging somewhere else; the watchdog retries within five minutes, by which time
+    /// the folder is invariably back.
     /// </summary>
     public static AppSettings Load()
     {
+        string? lastProblem = null;
+
         for (var attempt = 1; attempt <= LoadAttempts; attempt++)
         {
-            var sawUnreadable = false;
+            var allProvenAbsent = true;
 
             foreach (var dir in CandidateDirectories())
             {
                 var path = Path.Combine(dir, "settings.json");
-                var text = TryRead(path, out var missing);
-
-                if (text is null)
+                string? text = null;
+                try
                 {
-                    if (!missing) sawUnreadable = true;   // present but not readable yet - worth waiting for
+                    text = File.ReadAllText(path);
+                }
+                catch (Exception ex)
+                {
+                    if (!ProvenAbsent(path))
+                    {
+                        allProvenAbsent = false;
+                        lastProblem = $"{path}: {ex.GetType().Name} {ex.Message}";
+                    }
                     continue;
                 }
 
@@ -100,15 +113,19 @@ public sealed class AppSettings
                 }
                 catch (Exception ex)
                 {
-                    sawUnreadable = true;                 // corrupt, or half written by an installer
+                    allProvenAbsent = false;   // it is there, it just will not parse: worth another look
+                    lastProblem = $"{path}: {ex.GetType().Name} {ex.Message}";
                     Log.Error($"Attempt {attempt}: cannot parse {path}", ex);
                 }
             }
 
-            // Every candidate was genuinely absent, so waiting will not conjure one up.
-            if (!sawUnreadable) break;
+            if (allProvenAbsent) break;                       // genuinely a first run - no waiting
             if (attempt < LoadAttempts) Thread.Sleep(LoadRetryMs * attempt);
         }
+
+        if (lastProblem is not null)
+            throw new SettingsUnavailableException(
+                $"the settings could not be read after {LoadAttempts} attempts ({lastProblem})");
 
         var fallback = Environment.GetEnvironmentVariable("WORKTIMETRAY_DIR");
         if (string.IsNullOrWhiteSpace(fallback)) fallback = DefaultDataDirectory();
@@ -120,35 +137,44 @@ public sealed class AppSettings
         };
         fresh.Normalize();
         fresh.Save();
-        Log.Error($"No settings file could be read after {LoadAttempts} attempts. " +
-                  $"Falling back to defaults and logging to {fresh.LogDirectory}");
+        Log.Error($"No settings file exists yet; created one at {fresh.SettingsPath}");
         return fresh;
     }
 
     /// <summary>
-    /// Reads a file, saying whether it is absent or merely unreadable right now - the distinction
-    /// File.Exists cannot make, and the one this whole class turns on.
+    /// Proof that a file is absent rather than merely invisible: its folder has to be listable, and
+    /// the file has to be genuinely missing from it. A folder that is not there yet counts as proof
+    /// only when its own parent can be listed, which is what makes a real first run instant.
     /// </summary>
-    private static string? TryRead(string path, out bool missing)
+    private static bool ProvenAbsent(string path)
     {
-        missing = false;
         try
         {
-            return File.ReadAllText(path);
-        }
-        catch (FileNotFoundException)
-        {
-            missing = true;
-            return null;
-        }
-        catch (DirectoryNotFoundException)
-        {
-            missing = true;
-            return null;
+            var dir = Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(dir)) return false;
+
+            if (CanList(dir)) return !File.Exists(path);
+
+            var parent = Path.GetDirectoryName(dir);
+            return !string.IsNullOrEmpty(parent) && CanList(parent) && !Directory.Exists(dir);
         }
         catch
         {
-            return null;   // locked, denied, offline: all worth another attempt
+            return false;
+        }
+    }
+
+    private static bool CanList(string dir)
+    {
+        try
+        {
+            using var e = Directory.EnumerateFileSystemEntries(dir).GetEnumerator();
+            e.MoveNext();
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
